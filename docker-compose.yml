@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     networks:
       - saleor-backend-tier
-    env_file: common.env
+    env_file: local.env
     depends_on:
       - db
       - redis
