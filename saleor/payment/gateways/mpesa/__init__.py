@@ -1,9 +1,29 @@
+import uuid
+import json
+import logging
+import requests
+from django.core.cache import cache
+from django.utils import timezone
+
+from ... import ChargeStatus, TransactionKind
+from ...interface import GatewayConfig, GatewayResponse, PaymentData
+from .utils import generate_lipa_password, get_access_token
+
+logger = logging.getLogger(__name__)
+
+def dummy_success():
+    return True
+
 def _access_token(config: GatewayConfig):
     CACHE_TTL = 45 * 10
     return cache.get_or_set(
         'mpesa_auth_key', get_access_token(config),
         CACHE_TTL
     )
+
+def get_client_token(**_):
+    return str(uuid.uuid4())
+
 
 def get_billing_data(payment_information: PaymentData, config: GatewayConfig):
     shortcode = config.connection_params['shortcode']
@@ -25,6 +45,23 @@ def get_billing_data(payment_information: PaymentData, config: GatewayConfig):
         AccountReference=reference,
         TransactionDesc="Mpesa payment"
     )
+
+
+def void(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
+    error = None
+    success = dummy_success()
+    if not success:
+        error = "Unable to void the transaction."
+    return GatewayResponse(
+        is_success=success,
+        action_required=False,
+        kind=TransactionKind.VOID,
+        amount=payment_information.amount,
+        currency=payment_information.currency,
+        transaction_id=payment_information.token,
+        error=error,
+    )
+
 
 def capture(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
     """Perform capture transaction."""
@@ -61,6 +98,41 @@ def capture(payment_information: PaymentData, config: GatewayConfig) -> GatewayR
         transaction_id=response_data.get('CheckoutRequestID', payment_information.token),
         error=error
     )
+
+
+def confirm(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
+    """Perform confirm transaction."""
+    error = None
+    success = dummy_success()
+    if not success:
+        error = "Unable to process capture"
+
+    return GatewayResponse(
+        is_success=success,
+        action_required=False,
+        kind=TransactionKind.CAPTURE,
+        amount=payment_information.amount,
+        currency=payment_information.currency,
+        transaction_id=payment_information.token,
+        error=error
+    )
+
+
+def refund(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
+    error = None
+    success = dummy_success()
+    if not success:
+        error = "Unable to process refund"
+    return GatewayResponse(
+        is_success=success,
+        action_required=False,
+        kind=TransactionKind.REFUND,
+        amount=payment_information.amount,
+        currency=payment_information.currency,
+        transaction_id=payment_information.token,
+        error=error,
+    )
+
 
 def process_payment(
     payment_information: PaymentData, config: GatewayConfig
