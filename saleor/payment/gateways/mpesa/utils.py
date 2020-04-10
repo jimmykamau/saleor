@@ -2,7 +2,6 @@ import base64
 import logging
 
 import requests
-from django.conf import settings
 
 from ...interface import GatewayConfig
 
@@ -23,10 +22,10 @@ def generate_lipa_password(timestamp, config: GatewayConfig):
 
 def get_access_token(config: GatewayConfig):
     connection_params = config.connection_params
-    auth_string = generate_auth_string().decode('utf-8')
+    auth_string = generate_auth_string(config).decode('utf-8')
     try:
         response = requests.get(
-            f"{connection_params['']}/oauth/v1/generate?grant_type=client_credentials",
+            f"{connection_params['base_url']}oauth/v1/generate?grant_type=client_credentials",
             headers={
                 "Authorization": f"Basic {auth_string}",
                 "Content-Type": "application/json"
