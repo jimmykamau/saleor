@@ -65,18 +65,14 @@ def get_refund_data(payment_information: PaymentData, config: GatewayConfig) -> 
 
 
 def void(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
-    error = None
-    success = dummy_success()
-    if not success:
-        error = "Unable to void the transaction."
     return GatewayResponse(
-        is_success=success,
+        is_success=True,
         action_required=False,
         kind=TransactionKind.VOID,
         amount=payment_information.amount,
         currency=payment_information.currency,
         transaction_id=payment_information.token,
-        error=error,
+        error=None,
     )
 
 
