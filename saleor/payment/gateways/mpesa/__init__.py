@@ -169,7 +169,7 @@ def confirm(payment_information: PaymentData, config: GatewayConfig, capture_res
     return GatewayResponse(
         is_success=success,
         action_required=action_required,
-        kind=TransactionKind.CONFIRM,
+        kind=TransactionKind.CAPTURE, # TODO: Figure out how to call 'confirm' dynamically
         amount=payment_information.amount,
         currency=payment_information.currency,
         transaction_id=response_data.get('CheckoutRequestID', payment_information.token),
