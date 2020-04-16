@@ -230,5 +230,6 @@ def process_payment(
     if capture_request.error:
         return capture_request
     time.sleep(10)
+    # TODO: Figure out how to call 'confirm' dynamically
     confirmation = confirm(payment_information, config, capture_request)
     return confirmation
