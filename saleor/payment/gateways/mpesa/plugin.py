@@ -33,6 +33,11 @@ def require_active_plugin(fn):
 class MpesaGatewayPlugin(BasePlugin):
     PLUGIN_NAME = GATEWAY_NAME
     CONFIG_STRUCTURE = {
+        "Initiator name": {
+            "type": ConfigurationTypeField.STRING,
+            "help_text": "Provide username used to authenticate the transaction",
+            "label": "Initiator name"
+        },
         "Consumer key": {
             "type": ConfigurationTypeField.SECRET,
             "help_text": "Provide Mpesa Consumer Key",
@@ -64,6 +69,12 @@ class MpesaGatewayPlugin(BasePlugin):
             " will call with transaction details",
             "label": "Callback URL"
         },
+        "Initiator security credential": {
+            "type": ConfigurationTypeField.SECRET,
+            "help_text": "Provide the security credential "
+            "generated on the Safaricom Portal",
+            "label": "Initiator security credential"
+    }
     }
 
     def __init__(self, *args, **kwargs):
@@ -86,7 +97,9 @@ class MpesaGatewayPlugin(BasePlugin):
                     "base_url": configuration["Base URL"],
                     "shortcode": configuration["Business shortcode"],
                     "passkey": configuration["Online passkey"],
-                    "callback_url": configuration["Callback URL"]
+                    "callback_url": configuration["Callback URL"],
+                    "initiator_security_credential": configuration["Initiator security credential"],
+                    "initiator_name": configuration["Initiator name"]
                 },
                 store_customer=False,
             )
