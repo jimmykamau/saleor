@@ -7,14 +7,11 @@ import requests
 from django.core.cache import cache
 from django.utils import timezone
 
-from ... import ChargeStatus, TransactionError, TransactionKind
+from ... import TransactionError, TransactionKind
 from ...interface import GatewayConfig, GatewayResponse, PaymentData
 from .utils import generate_lipa_password, get_access_token
 
 logger = logging.getLogger(__name__)
-
-def dummy_success():
-    return True
 
 def _access_token(config: GatewayConfig):
     CACHE_TTL = 45 * 10
@@ -93,7 +90,6 @@ def capture(payment_information: PaymentData, config: GatewayConfig) -> GatewayR
             else:
                 error = TransactionError.PROCESSING_ERROR
                 logger.warning(f"Error initiating Mpesa payment: {response_data}", exc_info=True)
-                action_required = True
         else:
             logger.warning(f"Error initiating MPESA payment", exc_info=True)
             error = TransactionError.PROCESSING_ERROR
