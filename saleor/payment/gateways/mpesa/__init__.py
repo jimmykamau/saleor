@@ -47,6 +47,23 @@ def get_billing_data(payment_information: PaymentData, config: GatewayConfig):
     )
 
 
+def get_refund_data(payment_information: PaymentData, config: GatewayConfig) -> dict:
+    connection_params = config.connection_params
+    return dict(
+        Initiator=connection_params['initiator_name'],
+        SecurityCredential=connection_params['initiator_security_credential'],
+        CommandID="TransactionReversal",
+        TransactionID=payment_information.token,
+        Amount=int(payment_information.amount),
+        ReceiverParty=connection_params['shortcode'],
+        RecieverIdentifierType="1",
+        ResultURL=connection_params['callback_url'],
+        QueueTimeOutURL=connection_params['callback_url'],
+        Remarks="Reversal",
+        Occasion="Payment refund"
+    )
+
+
 def void(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
     error = None
     success = dummy_success()
