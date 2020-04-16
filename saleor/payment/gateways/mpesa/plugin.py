@@ -74,7 +74,7 @@ class MpesaGatewayPlugin(BasePlugin):
             "help_text": "Provide the security credential "
             "generated on the Safaricom Portal",
             "label": "Initiator security credential"
-    }
+        }
     }
 
     def __init__(self, *args, **kwargs):
@@ -113,10 +113,12 @@ class MpesaGatewayPlugin(BasePlugin):
             "configuration": [
                 {"name": "Consumer key", "value": None},
                 {"name": "Consumer secret", "value": None},
-                {"name": "Base URL", "value": None},
-                {"name": "Business shortcode", "value": None},
+                {"name": "Base URL", "value": "https://sandbox.safaricom.co.ke/"},
+                {"name": "Business shortcode", "value": "174379"},
                 {"name": "Online passkey", "value": None},
-                {"name": "Callback URL", "value": None}
+                {"name": "Callback URL", "value": None},
+                {"name": "Initiator security credential", "value": None},
+                {"name": "Initiator name", "value": "apitest425"}
             ],
         }
         return defaults
