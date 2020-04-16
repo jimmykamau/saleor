@@ -106,7 +106,6 @@ def capture(payment_information: PaymentData, config: GatewayConfig) -> GatewayR
         else:
             logger.warning(f"Error initiating MPESA payment", exc_info=True)
             error = TransactionError.PROCESSING_ERROR
-            action_required = True
     else:
         response_data['Timestamp'] = billing_data['Timestamp']
         success = True
@@ -158,17 +157,14 @@ def confirm(payment_information: PaymentData, config: GatewayConfig, capture_res
             else:
                 error = TransactionError.PROCESSING_ERROR
                 logger.warning(f"Error confirming MPESA payment: {response_data}", exc_info=True)
-                action_required = True
         else:
             logger.warning(f"Error confirming MPESA payment", exc_info=True)
             error = TransactionError.PROCESSING_ERROR
-            action_required = True
     else:
         if response_data['ResultDesc'] == "The service request is processed successfully.":
             success = True
         else:
             error = TransactionError.DECLINED
-            action_required = True
 
     return GatewayResponse(
         is_success=success,
