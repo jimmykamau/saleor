@@ -180,17 +180,45 @@ def confirm(payment_information: PaymentData, config: GatewayConfig, capture_res
 
 def refund(payment_information: PaymentData, config: GatewayConfig) -> GatewayResponse:
     error = None
-    success = dummy_success()
-    if not success:
-        error = "Unable to process refund"
+    response_data = None
+    action_required = False
+    success = False
+    access_token = _access_token(config)
+    refund_data = get_refund_data(payment_information, config)
+
+    try:
+        response = requests.post(
+            f"{config.connection_params['base_url']}mpesa/reversal/v1/request",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            data=json.dumps(refund_data)
+        )
+        response_data = response.json()
+        response.raise_for_status()
+    except Exception:
+        logger.warning(f"Error reversing M-PESA payment: {response_data}", exc_info=True)
+        error = response_data.get('errorMessage', TransactionError.PROCESSING_ERROR)
+    else:
+        if response_data.get('ResponseDescription') is not None and response_data.get('ResponseCode') == "0":
+            success = True
+        else:
+            logger.warning(
+                f"Error reversing M-PESA payment: {response_data.get('ResponseDescription')}",
+                exc_info=True
+            )
+            error = TransactionError.PROCESSING_ERROR
+
     return GatewayResponse(
         is_success=success,
-        action_required=False,
+        action_required=action_required,
         kind=TransactionKind.REFUND,
         amount=payment_information.amount,
         currency=payment_information.currency,
-        transaction_id=payment_information.token,
+        transaction_id=response_data.get('ConversationID', payment_information.token),
         error=error,
+        raw_response=response_data
     )
 
 
