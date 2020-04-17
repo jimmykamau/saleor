@@ -6,7 +6,6 @@ from ..enums import (
     AccountErrorCode,
     CheckoutErrorCode,
     DiscountErrorCode,
-    ExtensionsErrorCode,
     GiftCardErrorCode,
     MenuErrorCode,
     MetadataErrorCode,
@@ -14,10 +13,12 @@ from ..enums import (
     PageErrorCode,
     PaymentErrorCode,
     PermissionEnum,
+    PluginErrorCode,
     ProductErrorCode,
     ShippingErrorCode,
     ShopErrorCode,
     StockErrorCode,
+    TranslationErrorCode,
     WarehouseErrorCode,
     WebhookErrorCode,
     WishlistErrorCode,
@@ -73,6 +74,14 @@ class ProductError(Error):
     code = ProductErrorCode(description="The error code.", required=True)
 
 
+class ProductAttributeError(ProductError):
+    attributes = graphene.List(
+        graphene.NonNull(graphene.ID),
+        description="List of attributes IDs which causes the error.",
+        required=False,
+    )
+
+
 class BulkProductError(ProductError):
     index = graphene.Int(
         description="Index of an input list item that caused the error."
@@ -85,6 +94,11 @@ class ShopError(Error):
 
 class ShippingError(Error):
     code = ShippingErrorCode(description="The error code.", required=True)
+    warehouses = graphene.List(
+        graphene.NonNull(graphene.ID),
+        description="List of warehouse IDs which causes the error.",
+        required=False,
+    )
 
 
 class PageError(Error):
@@ -99,8 +113,8 @@ class GiftCardError(Error):
     code = GiftCardErrorCode(description="The error code.", required=True)
 
 
-class ExtensionsError(Error):
-    code = ExtensionsErrorCode(description="The error code.", required=True)
+class PluginError(Error):
+    code = PluginErrorCode(description="The error code.", required=True)
 
 
 class StockError(Error):
@@ -123,6 +137,10 @@ class WebhookError(Error):
 
 class WishlistError(Error):
     code = WishlistErrorCode(description="The error code.", required=True)
+
+
+class TranslationError(Error):
+    code = TranslationErrorCode(description="The error code.", required=True)
 
 
 class LanguageDisplay(graphene.ObjectType):

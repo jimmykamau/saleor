@@ -11,7 +11,7 @@ from prices import Money, TaxedMoney
 from saleor.account.models import CustomerEvent
 from saleor.core.permissions import OrderPermissions
 from saleor.core.taxes import zero_taxed_money
-from saleor.extensions.manager import ExtensionsManager
+from saleor.plugins.manager import PluginsManager
 from saleor.graphql.core.enums import ReportingPeriod
 from saleor.graphql.order.mutations.orders import (
     clean_order_cancel,
@@ -250,7 +250,7 @@ def test_order_available_shipping_methods_query(
     taxed_price = TaxedMoney(net=Money(10, "USD"), gross=Money(13, "USD"))
     apply_taxes_to_shipping_mock = Mock(return_value=taxed_price)
     monkeypatch.setattr(
-        ExtensionsManager, "apply_taxes_to_shipping", apply_taxes_to_shipping_mock
+        PluginsManager, "apply_taxes_to_shipping", apply_taxes_to_shipping_mock
     )
     site_settings.display_gross_prices = display_gross_prices
     site_settings.save()
@@ -2311,7 +2311,7 @@ def test_draft_order_query_with_filter_customer_fields(
         ({"created": {"gte": str(date.today() + timedelta(days=1))}}, 0),
     ],
 )
-def test_order_query_with_filter_created_(
+def test_draft_order_query_with_filter_created_(
     orders_filter,
     count,
     draft_orders_query_with_filter,
