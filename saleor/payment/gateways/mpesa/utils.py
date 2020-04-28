@@ -31,9 +31,10 @@ def get_access_token(config: GatewayConfig):
                 "Content-Type": "application/json"
             }
         )
+        json_response = response.json()
         response.raise_for_status()
     except Exception:
-        logger.exception("Error fetching Mpesa auth key")
+        logger.exception(f"Error fetching Mpesa auth key {json_response.get('errorMessage')}")
         return None
     else:
-        return response.json()['access_token']
+        return json_response.get('access_token')
