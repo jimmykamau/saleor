@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     networks:
       - saleor-backend-tier
-    env_file: common.env
+    env_file: local.env
     depends_on:
       - db
       - redis
@@ -40,11 +40,11 @@ services:
       dockerfile: ./Dockerfile
       args:
         STATIC_URL: '/static/'
-    command: celery -A saleor worker --app=saleor.celeryconf:app --loglevel=info
+    command: celery -A saleor worker --app=saleor.celeryconf:app --loglevel=info --uid=saleor
     restart: unless-stopped
     networks:
       - saleor-backend-tier
-    env_file: common.env
+    env_file: local.env
     depends_on:
       - redis
 
