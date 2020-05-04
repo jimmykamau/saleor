@@ -98,6 +98,32 @@ def test_attributes_query(user_api_client, product):
     assert len(attributes_data) == attributes.count()
 
 
+NOT_EXISTS_IDS_ATTRIBUTES_QUERY = """
+    query ($filter: AttributeFilterInput!) {
+        attributes(first: 5, filter: $filter) {
+            edges {
+                node {
+                    id
+                    name
+                }
+            }
+        }
+    }
+"""
+
+
+def test_attributes_query_ids_not_exists(user_api_client, category):
+    query = NOT_EXISTS_IDS_ATTRIBUTES_QUERY
+    variables = {"filter": {"ids": ["ygRqjpmXYqaTD9r=", "PBa4ZLBhnXHSz6v="]}}
+    response = user_api_client.post_graphql(query, variables)
+    content = get_graphql_content(response, ignore_errors=True)
+    message_error = '{"ids": [{"message": "Invalid ID specified.", "code": ""}]}'
+
+    assert len(content["errors"]) == 1
+    assert content["errors"][0]["message"] == message_error
+    assert content["data"]["attributes"] is None
+
+
 def test_attributes_query_hidden_attribute(user_api_client, product, color_attribute):
     query = QUERY_ATTRIBUTES
 
@@ -1183,9 +1209,11 @@ def test_resolve_assigned_attribute_without_values(api_client, product_type, pro
 ASSIGN_ATTR_QUERY = """
     mutation assign($productTypeId: ID!, $operations: [AttributeAssignInput]!) {
       attributeAssign(productTypeId: $productTypeId, operations: $operations) {
-        errors {
+        productErrors {
           field
+          code
           message
+          attributes
         }
         productType {
           id
@@ -1229,7 +1257,7 @@ def test_assign_attributes_to_product_type(
             query, variables, permissions=[permission_manage_products]
         )
     )["data"]["attributeAssign"]
-    assert not content["errors"], "Should have succeeded"
+    assert not content["productErrors"], "Should have succeeded"
 
     assert content["productType"]["id"] == product_type_global_id
     assert len(content["productType"]["productAttributes"]) == len(
@@ -1250,6 +1278,27 @@ def test_assign_attributes_to_product_type(
 
     assert found_product_attrs_ids == product_attributes_ids
     assert found_variant_attrs_ids == variant_attributes_ids
+
+
+def test_assign_non_existing_attributes_to_product_type(
+    staff_api_client, permission_manage_products, attribute_list
+):
+    product_type = ProductType.objects.create(name="Default Type", has_variants=True)
+    product_type_global_id = graphene.Node.to_global_id("ProductType", product_type.pk)
+
+    query = ASSIGN_ATTR_QUERY
+    attribute_id = graphene.Node.to_global_id("Attribute", "55511155593")
+    operations = [{"type": "PRODUCT", "id": attribute_id}]
+    variables = {"productTypeId": product_type_global_id, "operations": operations}
+
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_products]
+    )
+    content = get_graphql_content(response)
+    content = content["data"]["attributeAssign"]
+    assert content["productErrors"][0]["code"] == ProductErrorCode.NOT_FOUND.name
+    assert content["productErrors"][0]["field"] == "operations"
+    assert content["productErrors"][0]["attributes"] == [attribute_id]
 
 
 def test_assign_variant_attribute_to_product_type_with_disabled_variants(
@@ -1277,12 +1326,15 @@ def test_assign_variant_attribute_to_product_type_with_disabled_variants(
     content = get_graphql_content(staff_api_client.post_graphql(query, variables))[
         "data"
     ]["attributeAssign"]
-    assert content["errors"] == [
-        {
-            "field": "operations",
-            "message": "Variants are disabled in this product type.",
-        }
-    ]
+    assert content["productErrors"][0]["field"] == "operations"
+    assert (
+        content["productErrors"][0]["message"]
+        == "Variants are disabled in this product type."
+    )
+    assert (
+        content["productErrors"][0]["code"]
+        == ProductErrorCode.ATTRIBUTE_VARIANTS_DISABLED.name
+    )
 
 
 def test_assign_variant_attribute_having_unsupported_input_type(
@@ -1310,15 +1362,16 @@ def test_assign_variant_attribute_having_unsupported_input_type(
     content = get_graphql_content(staff_api_client.post_graphql(query, variables))[
         "data"
     ]["attributeAssign"]
-    assert content["errors"] == [
-        {
-            "field": "operations",
-            "message": (
-                "Attributes having for input types ['multiselect'] cannot be assigned "
-                "as variant attributes"
-            ),
-        }
-    ]
+    assert content["productErrors"][0]["field"] == "operations"
+    assert (
+        content["productErrors"][0]["message"]
+        == "Attributes having for input types ['multiselect'] "
+        "cannot be assigned as variant attributes"
+    )
+    assert (
+        content["productErrors"][0]["code"]
+        == ProductErrorCode.ATTRIBUTE_CANNOT_BE_ASSIGNED.name
+    )
 
 
 @pytest.mark.parametrize(
@@ -1365,12 +1418,15 @@ def test_assign_attribute_to_product_type_having_already_that_attribute(
     content = get_graphql_content(staff_api_client.post_graphql(query, variables))[
         "data"
     ]["attributeAssign"]
-    assert content["errors"] == [
-        {
-            "field": "operations",
-            "message": "Color (color) have already been assigned to this product type.",
-        }
-    ]
+    assert content["productErrors"][0]["field"] == "operations"
+    assert (
+        content["productErrors"][0]["message"]
+        == "Color (color) have already been assigned to this product type."
+    )
+    assert (
+        content["productErrors"][0]["code"]
+        == ProductErrorCode.ATTRIBUTE_ALREADY_ASSIGNED.name
+    )
 
 
 UNASSIGN_ATTR_QUERY = """
@@ -1936,43 +1992,8 @@ def test_sort_attributes_by_slug(api_client):
     assert attributes[1]["node"]["slug"] == "b"
 
 
-@pytest.mark.parametrize(
-    "sort_field, m2m_model",
-    (
-        ("DASHBOARD_VARIANT_POSITION", AttributeVariant),
-        ("DASHBOARD_PRODUCT_POSITION", AttributeProduct),
-    ),
-)
-def test_sort_attributes_by_position_in_product_type(
-    api_client,
-    color_attribute,
-    size_attribute,
-    sort_field: str,
-    m2m_model: Union[AttributeVariant, AttributeProduct],
-):
-    """Sorts attributes for dashboard custom ordering inside a given product type."""
-
-    product_type = ProductType.objects.create(name="My Product Type")
-    m2m_model.objects.create(
-        product_type=product_type, attribute=color_attribute, sort_order=0
-    )
-    m2m_model.objects.create(
-        product_type=product_type, attribute=size_attribute, sort_order=1
-    )
-
-    variables = {"sortBy": {"field": sort_field, "direction": "DESC"}}
-
-    attributes = get_graphql_content(
-        api_client.post_graphql(ATTRIBUTES_SORT_QUERY, variables)
-    )["data"]["attributes"]["edges"]
-
-    assert len(attributes) == 2
-    assert attributes[0]["node"]["slug"] == "size"
-    assert attributes[1]["node"]["slug"] == "color"
-
-
 def test_sort_attributes_by_default_sorting(api_client):
-    """Don't provide any sorting, this should sort by name by default."""
+    """Don't provide any sorting, this should sort by slug by default."""
     Attribute.objects.bulk_create(
         [Attribute(name="A", slug="b"), Attribute(name="B", slug="a")]
     )
@@ -1982,8 +2003,8 @@ def test_sort_attributes_by_default_sorting(api_client):
     )["data"]["attributes"]["edges"]
 
     assert len(attributes) == 2
-    assert attributes[0]["node"]["slug"] == "b"
-    assert attributes[1]["node"]["slug"] == "a"
+    assert attributes[0]["node"]["slug"] == "a"
+    assert attributes[1]["node"]["slug"] == "b"
 
 
 @pytest.mark.parametrize("is_variant", (True, False))

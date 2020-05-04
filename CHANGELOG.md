@@ -51,7 +51,7 @@ All notable, unreleased changes to this project will be documented in this file.
 - Fix getting title field in page mutations #5160 by @maarcingebala
 - Copy public and private metadata from the checkout to the order upon creation - #5165 by @dankolbman
 - Add warehouses and stocks- #4986 by @szewczykmira
-- Add permission groups - #5176 by @IKarbowiak
+- Add permission groups - #5176, #5513 by @IKarbowiak
 - Drop gettext occurrences - #5189 by @IKarbowiak
 - Fix `product_created` webhook - #5187 by @dzkb
 - Drop unused resolver `resolve_availability` - #5190 by @maarcingebala
@@ -70,7 +70,7 @@ All notable, unreleased changes to this project will be documented in this file.
 - Customer shouldn't be able to see draft orders by token - #5259 by @fowczarek
 - Customer shouldn't be able to query checkout with another customer - #5268 by @fowczarek
 - Added integration support of Jaeger Tracing - #5282 by @NyanKiyoshi
-- Customer shouldn't be able to see draft orders by token  - #5259 by @fowczarek
+- Customer shouldn't be able to see draft orders by token - #5259 by @fowczarek
 - Return `null` when querying `me` as an anonymous user - #5231 as @maarcingebala
 - Add `fulfillment created` webhook - @szewczykmira
 - Unify saleor metadata - #5178 by @fowczarek
@@ -82,6 +82,29 @@ All notable, unreleased changes to this project will be documented in this file.
 - Stock management refactor - #5323 by @IKarbowiak
 - Add discount error codes - #5348 by @IKarbowiak
 - Add benchmarks to checkout mutations - #5339 by @fowczarek
+- Add pagination tests - #5363 by @fowczarek
+- Add ability to assign multiple warehouses in mutations to create/update a shipping zone - #5399 by @fowczarek
+- Add filter by ids to warehouses query - #5414 by @fowczarek
+- Add shipping rate price validation - #5411 by @kswiatek92
+- Remove unused settings and environment variables - #5420 by @maarcingebala
+- Add product price validation - #5413 by @kswiatek92
+- Add attribute validation to attributeAssign - #5423 by @kswiatek92
+- Add possibility to Update/Delete more than one item in metadata - #5446 by @koradon
+- Check if image exists before validating - #5425 by @kswiatek92
+- Fix warehouses query not working without id - #5441 by @koradon
+- Add accountErrors to CreateToken as a required field - #5437 by @koradon
+- Raise GraphQLError if filter has not valid IDs - #5460 by @gabmartinez
+- Fix missing accountError when JSONWebTokenError is raised in CreateToken - #5465 by @koradon
+- Use AccountErrorCode.INVALID_CREDENTIALS instead of INVALID_PASSWORD - #5495 by @koradon
+- Add tests for pagination - #5468 by @koradon
+- Add job abstract model and interface - #5510 by @IKarbowiak
+- Refactor implementation of allocation - #5445 by @fowczarek
+- Fix WeightScalar - #5530 by @koradon
+- Add OrderFulfill mutation - #5525 by @fowczarek
+- Add home page - #5494 by @IKarbowiak and @dominik-zeglen
+- Extend errors in OrderFulfill mutation - #5553 by @fowczarek
+- Refactor OrderCancel mutation for many warehouses - #5554 by @fowczarek
+- Add negative weight validation - #5564 by @fowczarek
 
 ## 2.9.0
 
@@ -120,6 +143,7 @@ All notable, unreleased changes to this project will be documented in this file.
 - Ensure that a GraphQL query is a string - #4836 by @nix010
 - Add ability to configure the password reset link - #4863 by @fowczarek
 - Fixed a performance issue where Saleor would sometimes run huge, unneeded prefetches when resolving categories or collections - #5291 by @NyanKiyoshi
+- uWSGI now forces the django application to directly load on startup instead of being lazy - #5357 by @NyanKiyoshi
 
 ### Core
 
@@ -176,6 +200,7 @@ All notable, unreleased changes to this project will be documented in this file.
 - Fix bulk action checkboxes - #4618 by @dominik-zeglen
 - Fix rendering user avatar when it's empty #4546 by @maarcingebala
 - Remove Dashboard 2.0 files form Saleor repository - #4631 by @dominik-zeglen
+- Fix CreateToken mutation to use NonNull on errors field #5415 by @gabmartinez
 
 ### Other notable changes
 
