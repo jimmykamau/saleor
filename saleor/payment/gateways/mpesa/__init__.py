@@ -7,7 +7,7 @@ import requests
 from django.core.cache import cache
 from django.utils import timezone
 
-from ... import TransactionError, TransactionKind
+from ... import TransactionKind
 from ...interface import GatewayConfig, GatewayResponse, PaymentData
 from .utils import generate_lipa_password, get_access_token
 
@@ -101,11 +101,11 @@ def capture(payment_information: PaymentData, config: GatewayConfig) -> GatewayR
                 get_access_token(config)
                 capture(payment_information, config)
             else:
-                error = TransactionError.PROCESSING_ERROR
+                error = "Payment not processed. Kindly check the phone number provided and try again."
                 logger.warning(f"Error initiating Mpesa payment: {response_data}", exc_info=True)
         else:
             logger.warning(f"Error initiating MPESA payment", exc_info=True)
-            error = TransactionError.PROCESSING_ERROR
+            error = "An internal error occured. Kindly try again later."
     else:
         response_data['Timestamp'] = billing_data['Timestamp']
         success = True
@@ -155,16 +155,16 @@ def confirm(payment_information: PaymentData, config: GatewayConfig, capture_res
                 time.sleep(3)
                 confirm(payment_information, config, capture_response)
             else:
-                error = TransactionError.PROCESSING_ERROR
+                error = "The payment couldn't be confirmed. Kindly try again after a while."
                 logger.warning(f"Error confirming MPESA payment: {response_data}", exc_info=True)
         else:
             logger.warning(f"Error confirming MPESA payment", exc_info=True)
-            error = TransactionError.PROCESSING_ERROR
+            error = "An internal error occured. Kindly try again later."
     else:
         if response_data['ResultDesc'] == "The service request is processed successfully.":
             success = True
         else:
-            error = TransactionError.DECLINED
+            error = "The transaction was declined. Kindly check that you've provided the correct phone number and try again."
 
     return GatewayResponse(
         is_success=success,
@@ -199,7 +199,7 @@ def refund(payment_information: PaymentData, config: GatewayConfig) -> GatewayRe
         response.raise_for_status()
     except Exception:
         logger.warning(f"Error reversing M-PESA payment: {response_data}", exc_info=True)
-        error = response_data.get('errorMessage', TransactionError.PROCESSING_ERROR)
+        error = response_data.get('errorMessage', "An internal error occurred. Kindly try again later.")
     else:
         if response_data.get('ResponseDescription') is not None and response_data.get('ResponseCode') == "0":
             success = True
@@ -208,7 +208,7 @@ def refund(payment_information: PaymentData, config: GatewayConfig) -> GatewayRe
                 f"Error reversing M-PESA payment: {response_data.get('ResponseDescription')}",
                 exc_info=True
             )
-            error = TransactionError.PROCESSING_ERROR
+            error = response_data.get('ResponseDescription')
 
     return GatewayResponse(
         is_success=success,
