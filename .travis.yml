@@ -40,7 +40,6 @@ env:
   global:
     - DATABASE_URL="postgres://postgres@localhost:5432/saleor"
     - SECRET_KEY="irrelevant"
-    - DIFF_RESULTS_BASE_URL="http://dhrwmpu5reeyd.cloudfront.net"
     - QUERIES_RESULTS_PATH=/tmp/queries-results.json
   matrix:
     - DJANGO="3.0"
@@ -60,6 +59,8 @@ matrix:
     - env: TOXENV=check_migrations
       python: "3.8"
     - env: TOXENV=pydocstyle
+      python: "3.8"
+    - env: TOXENV=isort
       python: "3.8"
   allow_failures:
     - env: DJANGO="master"

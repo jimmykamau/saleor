@@ -1,8 +1,8 @@
 from django.conf import settings
 
 from ....core.management.commands.populatedb import Command as PopulateDBCommand
-from ....extensions.manager import get_extensions_manager
 from ....payment.gateways.braintree.plugin import BraintreeGatewayPlugin
+from ....plugins.manager import get_plugins_manager
 
 
 def configure_braintree():
@@ -13,10 +13,9 @@ def configure_braintree():
     if not (braintree_api_key and braintree_merchant_id and braintree_secret):
         return False
 
-    manager = get_extensions_manager()
-    manager.get_plugin_configuration(BraintreeGatewayPlugin.PLUGIN_NAME)
+    manager = get_plugins_manager()
     manager.save_plugin_configuration(
-        BraintreeGatewayPlugin.PLUGIN_NAME,
+        BraintreeGatewayPlugin.PLUGIN_ID,
         {
             "active": True,
             "configuration": [
