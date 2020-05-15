@@ -21,6 +21,7 @@
 *.log
 *.pot
 *.pyc
+.python-version
 local.env
 local_settings.py
 __pycache__/
