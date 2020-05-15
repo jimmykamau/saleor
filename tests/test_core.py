@@ -99,7 +99,7 @@ def test_create_superuser(db, client, media_root):
     assert User.objects.all().count() == 1
     admin = User.objects.all().first()
     assert admin.is_superuser
-    assert admin.avatar
+    assert not admin.avatar
     # Test duplicating
     create_superuser(credentials)
     assert User.objects.all().count() == 1
@@ -231,10 +231,10 @@ def test_build_absolute_uri(site_settings, settings):
     assert build_absolute_uri(location=url) == url
 
     # Case when static url is resolved to relative url
-    logo_url = build_absolute_uri(static("images/logo-light.svg"))
+    logo_url = build_absolute_uri(static("images/close.svg"))
     protocol = "https" if settings.ENABLE_SSL else "http"
     current_url = "%s://%s" % (protocol, site_settings.site.domain)
-    logo_location = urljoin(current_url, static("images/logo-light.svg"))
+    logo_location = urljoin(current_url, static("images/close.svg"))
     assert logo_url == logo_location
 
 
@@ -320,10 +320,10 @@ def test_cleardb_delete_staff_parameter(staff_user):
 
 
 @override_settings(DEBUG=True)
-def test_cleardb_preserves_data(admin_user, service_account, site_settings, staff_user):
+def test_cleardb_preserves_data(admin_user, app, site_settings, staff_user):
     call_command("cleardb")
     # These shouldn't be deleted when running `cleardb`.
     admin_user.refresh_from_db()
-    service_account.refresh_from_db()
+    app.refresh_from_db()
     site_settings.refresh_from_db()
     staff_user.refresh_from_db()

@@ -35,32 +35,21 @@ SEARCH_BACKEND = "saleor.search.backends.postgresql"
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
-RECAPTCHA_PUBLIC_KEY = ""
-RECAPTCHA_PRIVATE_KEY = ""
-
-VATLAYER_ACCESS_KEY = ""
-
-if "sqlite" in DATABASES["default"]["ENGINE"]:  # noqa
-    DATABASES["default"]["TEST"] = {  # noqa
-        "SERIALIZE": False,
-        "NAME": ":memory:",
-        "MIRROR": None,
-    }
-
 COUNTRIES_ONLY = None
 
 MEDIA_ROOT = None
+MEDIA_URL = "/media/"
 MAX_CHECKOUT_LINE_QUANTITY = 50
-
-USE_JSON_CONTENT = False
 
 AUTH_PASSWORD_VALIDATORS = []
 
 PASSWORD_HASHERS = ["tests.dummy_password_hasher.DummyHasher"]
-EXTENSIONS_MANAGER = "saleor.extensions.manager.ExtensionsManager"
+PLUGINS_MANAGER = "saleor.plugins.manager.PluginsManager"
 
 PLUGINS = []
 
 PATTERNS_IGNORED_IN_QUERY_CAPTURES: List[Union[Pattern, SimpleLazyObject]] = [
     lazy_re_compile(r"^SET\s+")
 ]
+
+INSTALLED_APPS.append("tests.api.pagination")  # noqa: F405

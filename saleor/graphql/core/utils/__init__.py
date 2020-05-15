@@ -2,7 +2,6 @@ import binascii
 from typing import TYPE_CHECKING, Type, Union
 
 import graphene
-import graphene_django_optimizer as gql_optimizer
 from django.core.exceptions import ValidationError
 from graphene import ObjectType
 
@@ -36,6 +35,10 @@ def str_to_enum(name):
 
 def validate_image_file(file, field_name):
     """Validate if the file is an image."""
+    if not file:
+        raise ValidationError(
+            {field_name: ValidationError("File is required", code="required")}
+        )
     if not file.content_type.startswith("image/"):
         raise ValidationError(
             {field_name: ValidationError("Invalid file type", code="invalid")}
@@ -62,12 +65,6 @@ def from_global_id_strict_type(
             {field: ValidationError(f"Must receive a {only_type} id", code="invalid")}
         )
     return _id
-
-
-def get_node_optimized(qs, lookup, info):
-    qs = qs.filter(**lookup)
-    qs = gql_optimizer.query(qs, info)
-    return qs[0] if qs else None
 
 
 def validate_slug_and_generate_if_needed(
@@ -99,3 +96,15 @@ def validate_slug_value(cleaned_input, slug_field_name: str = "slug"):
             raise ValidationError(
                 f"{slug_field_name.capitalize()} value cannot be blank."
             )
+
+
+def get_duplicates_ids(first_list, second_list):
+    """Return items that appear on both provided lists."""
+    if first_list and second_list:
+        return set(first_list) & set(second_list)
+    return []
+
+
+def get_duplicated_values(values):
+    """Return set of duplicated values."""
+    return {value for value in values if values.count(value) > 1}

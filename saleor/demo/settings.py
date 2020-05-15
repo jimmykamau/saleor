@@ -16,6 +16,8 @@ GraphQL query
 import logging
 import re
 
+from sentry_sdk.integrations.celery import CeleryIntegration
+
 from ..settings import *  # noqa: F403, lgtm [py/polluting-import]
 
 logger = logging.getLogger(__name__)
@@ -23,9 +25,9 @@ logger = logging.getLogger(__name__)
 # Override urls to use different GraphQL view on demo
 ROOT_URLCONF = "saleor.demo.urls"
 
-PLUGINS += ["saleor.extensions.plugins.anonymize.plugin.AnonymizePlugin"]
+PLUGINS += ["saleor.plugins.anonymize.plugin.AnonymizePlugin"]
 
-MIDDLEWARE += ["saleor.core.middleware.ReadOnlyMiddleware"]
+GRAPHENE["MIDDLEWARE"].insert(0, "saleor.graphql.middleware.ReadOnlyMiddleware")  # type: ignore
 
 BRAINTREE_API_KEY = os.environ.get("BRAINTREE_API_KEY")
 BRAINTREE_MERCHANT_ID = os.environ.get("BRAINTREE_MERCHANT_ID")
@@ -36,8 +38,6 @@ if not (BRAINTREE_API_KEY and BRAINTREE_MERCHANT_ID and BRAINTREE_SECRET_API_KEY
         "Some Braintree environment variables are missing. Set them to create the "
         "sandbox configuration in the demo mode with `populatedb` command."
     )
-
-USE_JSON_CONTENT = True
 
 PWA_ORIGINS = get_list(os.environ.get("PWA_ORIGINS", "pwa.saleor.io"))
 PWA_DASHBOARD_URL_RE = re.compile("^https?://[^/]+/dashboard/.*")
@@ -81,5 +81,7 @@ def before_send(event: dict, _hint: dict):
 DEMO_SENTRY_DSN = os.environ.get("DEMO_SENTRY_DSN")
 if DEMO_SENTRY_DSN:
     sentry_sdk.init(
-        DEMO_SENTRY_DSN, integrations=[DjangoIntegration()], before_send=before_send,
+        DEMO_SENTRY_DSN,
+        integrations=[CeleryIntegration(), DjangoIntegration()],
+        before_send=before_send,
     )

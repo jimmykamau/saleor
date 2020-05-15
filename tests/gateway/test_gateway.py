@@ -79,13 +79,13 @@ CONFIRM_RESPONSE = GatewayResponse(
     raw_response=RAW_RESPONSE,
 )
 TOKEN = "token"
-USED_GATEWAY = "Dummy"
+USED_GATEWAY = "mirumee.payments.dummy"
 
 
 @pytest.fixture
 def mock_payment_interface(mocker, fake_payment_interface):
     mgr = mocker.patch(
-        "saleor.payment.gateway.get_extensions_manager",
+        "saleor.payment.gateway.get_plugins_manager",
         autospec=True,
         return_value=fake_payment_interface,
     )
