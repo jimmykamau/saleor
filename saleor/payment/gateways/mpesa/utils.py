@@ -23,6 +23,7 @@ def generate_lipa_password(timestamp, config: GatewayConfig):
 def get_access_token(config: GatewayConfig):
     connection_params = config.connection_params
     auth_string = generate_auth_string(config).decode('utf-8')
+    json_response = None
     try:
         response = requests.get(
             f"{connection_params['base_url']}oauth/v1/generate?grant_type=client_credentials",
@@ -34,7 +35,7 @@ def get_access_token(config: GatewayConfig):
         json_response = response.json()
         response.raise_for_status()
     except Exception:
-        logger.exception(f"Error fetching Mpesa auth key {json_response.get('errorMessage')}")
+        logger.exception(f"Error fetching Mpesa auth key", exc_info=True)
         return None
     else:
         return json_response.get('access_token')
