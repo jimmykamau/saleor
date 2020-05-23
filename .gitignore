@@ -36,3 +36,8 @@ dist/
 
 # Exported results file
 django-queries-results.html
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
