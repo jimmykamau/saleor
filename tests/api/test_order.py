@@ -4,6 +4,7 @@ from unittest.mock import ANY, MagicMock, Mock, call, patch
 
 import graphene
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from freezegun import freeze_time
 from prices import Money, TaxedMoney
@@ -785,6 +786,23 @@ def test_validate_draft_order_non_existing_variant(draft_order):
     assert e.value.error_dict["lines"][0].message == msg
 
 
+def test_validate_draft_order_with_unpublished_product(draft_order):
+    order = draft_order
+    line = order.lines.first()
+    variant = line.variant
+    variant.product.is_published = False
+    variant.product.save()
+    line.refresh_from_db()
+
+    with pytest.raises(ValidationError) as e:
+        validate_draft_order(order, "US")
+    msg = "Can't finalize draft with unpublished product."
+    error = e.value.error_dict["lines"][0]
+
+    assert error.message == msg
+    assert error.code == OrderErrorCode.PRODUCT_NOT_PUBLISHED
+
+
 def test_validate_draft_order_out_of_stock_variant(draft_order):
     order = draft_order
     line = order.lines.first()
@@ -1465,6 +1483,21 @@ def test_order_add_note_fail_on_empty_message(
     assert data["orderErrors"][0]["code"] == OrderErrorCode.REQUIRED.name
 
 
+MUTATION_ORDER_CANCEL = """
+mutation cancelOrder($id: ID!) {
+    orderCancel(id: $id) {
+        order {
+            status
+        }
+        orderErrors{
+            field
+            code
+        }
+    }
+}
+"""
+
+
 @patch("saleor.graphql.order.mutations.orders.cancel_order")
 @patch("saleor.graphql.order.mutations.orders.clean_order_cancel")
 def test_order_cancel(
@@ -1475,23 +1508,10 @@ def test_order_cancel(
     order_with_lines,
 ):
     order = order_with_lines
-    query = """
-        mutation cancelOrder($id: ID!) {
-            orderCancel(id: $id) {
-                order {
-                    status
-                }
-                orderErrors{
-                    field
-                    code
-                }
-            }
-        }
-    """
     order_id = graphene.Node.to_global_id("Order", order.id)
     variables = {"id": order_id}
     response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_orders]
+        MUTATION_ORDER_CANCEL, variables, permissions=[permission_manage_orders]
     )
     content = get_graphql_content(response)
     data = content["data"]["orderCancel"]
@@ -1499,6 +1519,29 @@ def test_order_cancel(
 
     mock_clean_order_cancel.assert_called_once_with(order)
     mock_cancel_order.assert_called_once_with(order=order, user=staff_api_client.user)
+
+
+@patch("saleor.graphql.order.mutations.orders.cancel_order")
+@patch("saleor.graphql.order.mutations.orders.clean_order_cancel")
+def test_order_cancel_as_app(
+    mock_clean_order_cancel,
+    mock_cancel_order,
+    app_api_client,
+    permission_manage_orders,
+    order_with_lines,
+):
+    order = order_with_lines
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variables = {"id": order_id}
+    response = app_api_client.post_graphql(
+        MUTATION_ORDER_CANCEL, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    data = content["data"]["orderCancel"]
+    assert not data["orderErrors"]
+
+    mock_clean_order_cancel.assert_called_once_with(order)
+    mock_cancel_order.assert_called_once_with(order=order, user=AnonymousUser())
 
 
 def test_order_capture(
@@ -2150,6 +2193,19 @@ def test_query_draft_order_by_token_as_anonymous_customer(api_client, draft_orde
     assert not content["data"]["orderByToken"]
 
 
+MUTATION_ORDER_BULK_CANCEL = """
+mutation CancelManyOrders($ids: [ID]!) {
+    orderBulkCancel(ids: $ids) {
+        count
+        orderErrors{
+            field
+            code
+        }
+    }
+}
+"""
+
+
 @patch("saleor.graphql.order.bulk_mutations.orders.cancel_order")
 def test_order_bulk_cancel(
     mock_cancel_order,
@@ -2159,17 +2215,6 @@ def test_order_bulk_cancel(
     permission_manage_orders,
     address,
 ):
-    query = """
-        mutation CancelManyOrders($ids: [ID]!) {
-            orderBulkCancel(ids: $ids) {
-                count
-                orderErrors{
-                    field
-                    code
-                }
-            }
-        }
-    """
     orders = order_list
     orders.append(fulfilled_order_with_all_cancelled_fulfillments)
     expected_count = sum(order.can_cancel() for order in orders)
@@ -2177,7 +2222,7 @@ def test_order_bulk_cancel(
         "ids": [graphene.Node.to_global_id("Order", order.id) for order in orders],
     }
     response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_orders]
+        MUTATION_ORDER_BULK_CANCEL, variables, permissions=[permission_manage_orders]
     )
     content = get_graphql_content(response)
     data = content["data"]["orderBulkCancel"]
@@ -2185,6 +2230,35 @@ def test_order_bulk_cancel(
     assert not data["orderErrors"]
 
     calls = [call(order=order, user=staff_api_client.user) for order in orders]
+
+    mock_cancel_order.assert_has_calls(calls, any_order=True)
+    mock_cancel_order.call_count == expected_count
+
+
+@patch("saleor.graphql.order.bulk_mutations.orders.cancel_order")
+def test_order_bulk_cancel_as_app(
+    mock_cancel_order,
+    app_api_client,
+    order_list,
+    fulfilled_order_with_all_cancelled_fulfillments,
+    permission_manage_orders,
+    address,
+):
+    orders = order_list
+    orders.append(fulfilled_order_with_all_cancelled_fulfillments)
+    expected_count = sum(order.can_cancel() for order in orders)
+    variables = {
+        "ids": [graphene.Node.to_global_id("Order", order.id) for order in orders],
+    }
+    response = app_api_client.post_graphql(
+        MUTATION_ORDER_BULK_CANCEL, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    data = content["data"]["orderBulkCancel"]
+    assert data["count"] == expected_count
+    assert not data["orderErrors"]
+
+    calls = [call(order=order, user=AnonymousUser()) for order in orders]
 
     mock_cancel_order.assert_has_calls(calls, any_order=True)
     mock_cancel_order.call_count == expected_count
