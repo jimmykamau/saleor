@@ -4,6 +4,7 @@ import time
 import uuid
 
 import requests
+from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -12,6 +13,7 @@ from ...interface import GatewayConfig, GatewayResponse, PaymentData
 from .utils import generate_lipa_password, get_access_token
 
 logger = logging.getLogger(__name__)
+CURRENT_SITE = Site.objects.get_current()
 
 def _access_token(config: GatewayConfig):
     CACHE_TTL = 45 * 10
@@ -30,7 +32,7 @@ def get_billing_data(payment_information: PaymentData, config: GatewayConfig):
     password = generate_lipa_password(timestamp, config)
     callback_url = config.connection_params['callback_url']
     phone_number = payment_information.billing.phone[1:]
-    token = payment_information.order_id if payment_information.order_id else payment_information.token
+    token = CURRENT_SITE.name
 
     return dict(
         BusinessShortCode=shortcode,
@@ -164,6 +166,7 @@ def confirm(payment_information: PaymentData, config: GatewayConfig, capture_res
         if response_data['ResultDesc'] == "The service request is processed successfully.":
             success = True
         else:
+            logger.debug(response_data)
             error = "The transaction was declined. Kindly check that you've provided the correct phone number and try again."
 
     return GatewayResponse(
