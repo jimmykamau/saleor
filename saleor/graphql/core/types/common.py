@@ -7,7 +7,9 @@ from ..enums import (
     AppErrorCode,
     CheckoutErrorCode,
     DiscountErrorCode,
+    ExportErrorCode,
     GiftCardErrorCode,
+    InvoiceErrorCode,
     JobStatusEnum,
     MenuErrorCode,
     MetadataErrorCode,
@@ -24,6 +26,7 @@ from ..enums import (
     TranslationErrorCode,
     WarehouseErrorCode,
     WebhookErrorCode,
+    WeightUnitsEnum,
     WishlistErrorCode,
 )
 from .money import VAT
@@ -99,10 +102,19 @@ class StaffError(AccountError):
 
 class CheckoutError(Error):
     code = CheckoutErrorCode(description="The error code.", required=True)
+    variants = graphene.List(
+        graphene.NonNull(graphene.ID),
+        description="List of varint IDs which causes the error.",
+        required=False,
+    )
 
 
 class DiscountError(Error):
     code = DiscountErrorCode(description="The error code.", required=True)
+
+
+class ExportError(Error):
+    code = ExportErrorCode(description="The error code.", required=True)
 
 
 class MenuError(Error):
@@ -123,6 +135,10 @@ class OrderError(Error):
     )
 
 
+class InvoiceError(Error):
+    code = InvoiceErrorCode(description="The error code.", required=True)
+
+
 class PermissionGroupError(Error):
     code = PermissionGroupErrorCode(description="The error code.", required=True)
     permissions = graphene.List(
@@ -139,9 +155,6 @@ class PermissionGroupError(Error):
 
 class ProductError(Error):
     code = ProductErrorCode(description="The error code.", required=True)
-
-
-class ProductAttributeError(ProductError):
     attributes = graphene.List(
         graphene.NonNull(graphene.ID),
         description="List of attributes IDs which causes the error.",
@@ -221,7 +234,7 @@ class SeoInput(graphene.InputObjectType):
 
 
 class Weight(graphene.ObjectType):
-    unit = graphene.String(description="Weight unit.", required=True)
+    unit = WeightUnitsEnum(description="Weight unit.", required=True)
     value = graphene.Float(description="Weight value.", required=True)
 
     class Meta:
@@ -288,6 +301,7 @@ class Job(graphene.Interface):
     updated_at = graphene.DateTime(
         description="Date time of job last update in ISO 8601 format.", required=True
     )
+    message = graphene.String(description="Job message.")
 
     @classmethod
     def resolve_type(cls, instance, _info):

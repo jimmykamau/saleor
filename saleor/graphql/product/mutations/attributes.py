@@ -4,13 +4,13 @@ import graphene
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.db.models import Q
-from django.template.defaultfilters import slugify
+from django.utils.text import slugify
 
-from ....core.permissions import ProductPermissions
+from ....core.permissions import ProductPermissions, ProductTypePermissions
 from ....product import AttributeInputType, models
 from ....product.error_codes import ProductErrorCode
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
-from ...core.types.common import ProductAttributeError, ProductError
+from ...core.types.common import ProductError
 from ...core.utils import (
     from_global_id_strict_type,
     validate_slug_and_generate_if_needed,
@@ -21,6 +21,7 @@ from ...product.types import ProductType
 from ..descriptions import AttributeDescriptions, AttributeValueDescriptions
 from ..enums import AttributeInputTypeEnum, AttributeTypeEnum
 from ..types import Attribute, AttributeValue
+from .common import ReorderInput
 
 
 class AttributeValueCreateInput(graphene.InputObjectType):
@@ -96,22 +97,13 @@ class AttributeAssignInput(graphene.InputObjectType):
     )
 
 
-class ReorderInput(graphene.InputObjectType):
-    id = graphene.ID(required=True, description="The ID of the item to move.")
-    sort_order = graphene.Int(
-        description=(
-            "The new relative sorting position of the item (from -inf to +inf)."
-        )
-    )
-
-
 class AttributeMixin:
     @classmethod
     def check_values_are_unique(cls, values_input, attribute):
         # Check values uniqueness in case of creating new attribute.
         existing_values = attribute.values.values_list("slug", flat=True)
         for value_data in values_input:
-            slug = slugify(value_data["name"])
+            slug = slugify(value_data["name"], allow_unicode=True)
             if slug in existing_values:
                 msg = (
                     "Value %s already exists within this attribute."
@@ -125,7 +117,10 @@ class AttributeMixin:
                     }
                 )
 
-        new_slugs = [slugify(value_data["name"]) for value_data in values_input]
+        new_slugs = [
+            slugify(value_data["name"], allow_unicode=True)
+            for value_data in values_input
+        ]
         if len(set(new_slugs)) != len(new_slugs):
             raise ValidationError(
                 {
@@ -149,7 +144,7 @@ class AttributeMixin:
             return
 
         for value_data in values_input:
-            value_data["slug"] = slugify(value_data["name"])
+            value_data["slug"] = slugify(value_data["name"], allow_unicode=True)
             attribute_value = models.AttributeValue(**value_data, attribute=attribute)
             try:
                 attribute_value.full_clean()
@@ -195,7 +190,7 @@ class AttributeCreate(AttributeMixin, ModelMutation):
     class Meta:
         model = models.Attribute
         description = "Creates an attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -236,7 +231,7 @@ class AttributeUpdate(AttributeMixin, ModelMutation):
     class Meta:
         model = models.Attribute
         description = "Updates attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -300,12 +295,14 @@ class AttributeAssign(BaseMutation):
 
     class Meta:
         description = "Assign attributes to a given product type."
-        error_type_class = ProductAttributeError
+        error_type_class = ProductError
         error_type_field = "product_errors"
 
     @classmethod
     def check_permissions(cls, context):
-        return context.user.has_perm(ProductPermissions.MANAGE_PRODUCTS)
+        return context.user.has_perm(
+            ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES
+        )
 
     @classmethod
     def get_operations(cls, info, operations: List[AttributeAssignInput]):
@@ -469,7 +466,9 @@ class AttributeUnassign(BaseMutation):
 
     @classmethod
     def check_permissions(cls, context):
-        return context.user.has_perm(ProductPermissions.MANAGE_PRODUCTS)
+        return context.user.has_perm(
+            ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES
+        )
 
     @classmethod
     def save_field_values(cls, product_type, field, pks):
@@ -507,7 +506,7 @@ class AttributeDelete(ModelDeleteMutation):
     class Meta:
         model = models.Attribute
         description = "Deletes an attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -516,7 +515,7 @@ class AttributeUpdateMeta(UpdateMetaBaseMutation):
     class Meta:
         model = models.Attribute
         description = "Update public metadata for attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         public = True
         error_type_class = ProductError
         error_type_field = "product_errors"
@@ -526,7 +525,7 @@ class AttributeClearMeta(ClearMetaBaseMutation):
     class Meta:
         description = "Clears public metadata item for attribute."
         model = models.Attribute
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         public = True
         error_type_class = ProductError
         error_type_field = "product_errors"
@@ -536,7 +535,7 @@ class AttributeUpdatePrivateMeta(UpdateMetaBaseMutation):
     class Meta:
         description = "Update public metadata for attribute."
         model = models.Attribute
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         public = False
         error_type_class = ProductError
         error_type_field = "product_errors"
@@ -546,7 +545,7 @@ class AttributeClearPrivateMeta(ClearMetaBaseMutation):
     class Meta:
         description = "Clears public metadata item for attribute."
         model = models.Attribute
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         public = False
         error_type_class = ProductError
         error_type_field = "product_errors"
@@ -589,7 +588,7 @@ class AttributeValueCreate(ModelMutation):
     @classmethod
     def clean_input(cls, info, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
-        cleaned_input["slug"] = slugify(cleaned_input["name"])
+        cleaned_input["slug"] = slugify(cleaned_input["name"], allow_unicode=True)
         return cleaned_input
 
     @classmethod
@@ -624,7 +623,7 @@ class AttributeValueUpdate(ModelMutation):
     class Meta:
         model = models.AttributeValue
         description = "Updates value of an attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -632,7 +631,7 @@ class AttributeValueUpdate(ModelMutation):
     def clean_input(cls, info, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
         if "name" in cleaned_input:
-            cleaned_input["slug"] = slugify(cleaned_input["name"])
+            cleaned_input["slug"] = slugify(cleaned_input["name"], allow_unicode=True)
         return cleaned_input
 
     @classmethod
@@ -656,7 +655,7 @@ class AttributeValueDelete(ModelDeleteMutation):
     class Meta:
         model = models.AttributeValue
         description = "Deletes a value of an attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -674,7 +673,7 @@ class ProductTypeReorderAttributes(BaseMutation):
 
     class Meta:
         description = "Reorder the attributes of a product type."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
@@ -750,7 +749,7 @@ class AttributeReorderValues(BaseMutation):
 
     class Meta:
         description = "Reorder the values of an attribute."
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 

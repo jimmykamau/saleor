@@ -1,15 +1,16 @@
 from typing import Any, List
 
-from graphql_jwt.exceptions import PermissionDenied
-
 from ...account import models as account_models
+from ...core.exceptions import PermissionDenied
 from ...core.permissions import (
     AccountPermissions,
     AppPermission,
     BasePermissionEnum,
     CheckoutPermissions,
     OrderPermissions,
+    PagePermissions,
     ProductPermissions,
+    ProductTypePermissions,
 )
 
 
@@ -47,7 +48,15 @@ def product_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
     return [ProductPermissions.MANAGE_PRODUCTS]
 
 
+def product_type_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
+    return [ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES]
+
+
 def order_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
+    return [OrderPermissions.MANAGE_ORDERS]
+
+
+def invoice_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
     return [OrderPermissions.MANAGE_ORDERS]
 
 
@@ -59,16 +68,22 @@ def checkout_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
     return [CheckoutPermissions.MANAGE_CHECKOUTS]
 
 
+def page_permissions(_info, _object_pk: Any) -> List[BasePermissionEnum]:
+    return [PagePermissions.MANAGE_PAGES]
+
+
 PUBLIC_META_PERMISSION_MAP = {
-    "Attribute": product_permissions,
+    "Attribute": product_type_permissions,
     "Category": product_permissions,
     "Checkout": no_permissions,
     "Collection": product_permissions,
     "DigitalContent": product_permissions,
     "Fulfillment": order_permissions,
     "Order": no_permissions,
+    "Invoice": invoice_permissions,
+    "Page": page_permissions,
     "Product": product_permissions,
-    "ProductType": product_permissions,
+    "ProductType": product_type_permissions,
     "ProductVariant": product_permissions,
     "App": app_permissions,
     "User": public_user_permissions,
@@ -76,15 +91,17 @@ PUBLIC_META_PERMISSION_MAP = {
 
 
 PRIVATE_META_PERMISSION_MAP = {
-    "Attribute": product_permissions,
+    "Attribute": product_type_permissions,
     "Category": product_permissions,
     "Checkout": checkout_permissions,
     "Collection": product_permissions,
     "DigitalContent": product_permissions,
     "Fulfillment": order_permissions,
     "Order": order_permissions,
+    "Invoice": invoice_permissions,
+    "Page": page_permissions,
     "Product": product_permissions,
-    "ProductType": product_permissions,
+    "ProductType": product_type_permissions,
     "ProductVariant": product_permissions,
     "App": app_permissions,
     "User": private_user_permissions,

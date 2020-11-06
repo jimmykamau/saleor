@@ -1,5 +1,5 @@
 import graphene
-from django.db.models import Count, IntegerField, OuterRef, QuerySet, Subquery
+from django.db.models import Count, IntegerField, Min, OuterRef, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 
 from ...product.models import Category, Product
@@ -105,6 +105,7 @@ class CollectionSortField(graphene.Enum):
     NAME = ["name"]
     AVAILABILITY = ["is_published", "name"]
     PRODUCT_COUNT = ["product_count", "name"]
+    PUBLICATION_DATE = ["publication_date", "name"]
 
     @property
     def description(self):
@@ -113,6 +114,7 @@ class CollectionSortField(graphene.Enum):
             CollectionSortField.NAME,
             CollectionSortField.AVAILABILITY,
             CollectionSortField.PRODUCT_COUNT,
+            CollectionSortField.PUBLICATION_DATE,
         ]:
             sort_name = self.name.lower().replace("_", " ")
             return f"Sort collections by {sort_name}."
@@ -131,11 +133,12 @@ class CollectionSortingInput(SortInputObjectType):
 
 class ProductOrderField(graphene.Enum):
     NAME = ["name", "slug"]
-    PRICE = ["price_amount", "name", "slug"]
+    PRICE = ["min_variants_price_amount", "name", "slug"]
     MINIMAL_PRICE = ["minimal_variant_price_amount", "name", "slug"]
     DATE = ["updated_at", "name", "slug"]
     TYPE = ["product_type__name", "name", "slug"]
     PUBLISHED = ["is_published", "name", "slug"]
+    PUBLICATION_DATE = ["publication_date", "name", "slug"]
 
     @property
     def description(self):
@@ -149,10 +152,17 @@ class ProductOrderField(graphene.Enum):
             ),
             ProductOrderField.DATE.name: "update date",
             ProductOrderField.PUBLISHED.name: "publication status",
+            ProductOrderField.PUBLICATION_DATE.name: "publication date",
         }
         if self.name in descriptions:
             return f"Sort products by {descriptions[self.name]}."
         raise ValueError("Unsupported enum value: %s" % self.value)
+
+    @staticmethod
+    def qs_with_price(queryset: QuerySet) -> QuerySet:
+        return queryset.annotate(
+            min_variants_price_amount=Min("variants__price_amount")
+        )
 
 
 class ProductOrder(SortInputObjectType):

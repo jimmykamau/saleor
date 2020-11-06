@@ -10,12 +10,14 @@ from django.db.models import Model, QuerySet
 from ...core.permissions import MenuPermissions, SitePermissions
 from ...menu import models
 from ...menu.error_codes import MenuErrorCode
-from ...menu.utils import update_menu
 from ...page import models as page_models
 from ...product import models as product_models
 from ..core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
 from ..core.types.common import MenuError
-from ..core.utils import from_global_id_strict_type
+from ..core.utils import (
+    from_global_id_strict_type,
+    validate_slug_and_generate_if_needed,
+)
 from ..core.utils.reordering import perform_reordering
 from ..page.types import Page
 from ..product.types import Category, Collection
@@ -46,12 +48,12 @@ class MenuItemCreateInput(MenuItemInput):
     )
 
 
-class MenuInput(graphene.InputObjectType):
-    name = graphene.String(description="Name of the menu.")
-
-
 class MenuCreateInput(graphene.InputObjectType):
     name = graphene.String(description="Name of the menu.", required=True)
+    slug = graphene.String(
+        description="Slug of the menu. Will be generated if not provided.",
+        required=False,
+    )
     items = graphene.List(MenuItemInput, description="List of menu items.")
 
 
@@ -71,6 +73,14 @@ class MenuCreate(ModelMutation):
     @classmethod
     def clean_input(cls, info, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
+        try:
+            cleaned_input = validate_slug_and_generate_if_needed(
+                instance, "name", cleaned_input
+            )
+        except ValidationError as error:
+            error.code = MenuErrorCode.REQUIRED.value
+            raise ValidationError({"slug": error})
+
         items = []
         for item in cleaned_input.get("items", []):
             category = item.get("category")
@@ -120,6 +130,11 @@ class MenuCreate(ModelMutation):
         items = cleaned_data.get("items", [])
         for item in items:
             instance.items.create(**item)
+
+
+class MenuInput(graphene.InputObjectType):
+    name = graphene.String(description="Name of the menu.")
+    slug = graphene.String(description="Slug of the menu.", required=False)
 
 
 class MenuUpdate(ModelMutation):
@@ -209,11 +224,6 @@ class MenuItemCreate(ModelMutation):
             )
         return cleaned_input
 
-    @classmethod
-    def save(cls, info, instance, cleaned_input):
-        instance.save()
-        update_menu(instance.menu)
-
 
 class MenuItemUpdate(MenuItemCreate):
     class Arguments:
@@ -253,12 +263,6 @@ class MenuItemDelete(ModelDeleteMutation):
         permissions = (MenuPermissions.MANAGE_MENUS,)
         error_type_class = MenuError
         error_type_field = "menu_errors"
-
-    @classmethod
-    def perform_mutation(cls, _root, info, **data):
-        response = super().perform_mutation(_root, info, **data)
-        update_menu(response.menuItem.menu)
-        return response
 
 
 @dataclass(frozen=True)

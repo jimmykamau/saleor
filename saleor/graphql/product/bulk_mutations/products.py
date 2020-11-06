@@ -4,7 +4,8 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from ....core.permissions import ProductPermissions
+from ....core.permissions import ProductPermissions, ProductTypePermissions
+from ....order import OrderStatus, models as order_models
 from ....product import models
 from ....product.error_codes import ProductErrorCode
 from ....product.tasks import update_product_minimal_variant_price_task
@@ -25,6 +26,7 @@ from ...core.types.common import (
     StockError,
 )
 from ...core.utils import get_duplicated_values
+from ...core.validators import validate_price_precision
 from ...utils import resolve_global_ids_to_primary_keys
 from ...warehouse.types import Warehouse
 from ..mutations.products import (
@@ -34,7 +36,7 @@ from ..mutations.products import (
     ProductVariantInput,
     StockInput,
 )
-from ..types import ProductVariant
+from ..types import Product, ProductVariant
 from ..utils import create_stocks, get_used_variants_attribute_values
 
 
@@ -107,6 +109,24 @@ class ProductBulkDelete(ModelBulkDeleteMutation):
         error_type_class = ProductError
         error_type_field = "product_errors"
 
+    @classmethod
+    def perform_mutation(cls, _root, info, ids, **data):
+        _, pks = resolve_global_ids_to_primary_keys(ids, Product)
+        variants = models.ProductVariant.objects.filter(product__pk__in=pks)
+        # get draft order lines for products
+        order_line_pks = list(
+            order_models.OrderLine.objects.filter(
+                variant__in=variants, order__status=OrderStatus.DRAFT
+            ).values_list("pk", flat=True)
+        )
+
+        response = super().perform_mutation(_root, info, ids, **data)
+
+        # delete order lines for deleted variants
+        order_models.OrderLine.objects.filter(pk__in=order_line_pks).delete()
+
+        return response
+
 
 class ProductVariantBulkCreateInput(ProductVariantInput):
     attributes = graphene.List(
@@ -168,23 +188,21 @@ class ProductVariantBulkCreate(BaseMutation):
 
         cost_price_amount = cleaned_input.pop("cost_price", None)
         if cost_price_amount is not None:
-            if cost_price_amount < 0:
-                errors["costPrice"] = ValidationError(
-                    "Product price cannot be lower than 0.",
-                    code=ProductErrorCode.INVALID.value,
-                    params={"index": variant_index},
-                )
+            try:
+                validate_price_precision(cost_price_amount)
+            except ValidationError as error:
+                error.code = ProductErrorCode.INVALID.value
+                raise ValidationError({"cost_price": error})
             cleaned_input["cost_price_amount"] = cost_price_amount
 
-        price_override_amount = cleaned_input.pop("price_override", None)
-        if price_override_amount is not None:
-            if price_override_amount < 0:
-                errors["priceOverride"] = ValidationError(
-                    "Product price cannot be lower than 0.",
-                    code=ProductErrorCode.INVALID.value,
-                    params={"index": variant_index},
-                )
-            cleaned_input["price_override_amount"] = price_override_amount
+        price_amount = cleaned_input.pop("price", None)
+        if price_amount is not None:
+            try:
+                validate_price_precision(price_amount)
+            except ValidationError as error:
+                error.code = ProductErrorCode.INVALID.value
+                raise ValidationError({"price": error})
+            cleaned_input["price_amount"] = price_amount
 
         attributes = cleaned_input.get("attributes")
         if attributes:
@@ -290,13 +308,16 @@ class ProductVariantBulkCreate(BaseMutation):
 
     @classmethod
     @transaction.atomic
-    def save_variants(cls, info, instances, cleaned_inputs):
+    def save_variants(cls, info, instances, product, cleaned_inputs):
         assert len(instances) == len(
             cleaned_inputs
         ), "There should be the same number of instances and cleaned inputs."
         for instance, cleaned_input in zip(instances, cleaned_inputs):
             cls.save(info, instance, cleaned_input)
             cls.create_variant_stocks(instance, cleaned_input)
+        if not product.default_variant:
+            product.default_variant = instances[0]
+            product.save(update_fields=["default_variant", "updated_at"])
 
     @classmethod
     def create_variant_stocks(cls, variant, cleaned_input):
@@ -318,7 +339,7 @@ class ProductVariantBulkCreate(BaseMutation):
         instances = cls.create_variants(info, cleaned_inputs, product, errors)
         if errors:
             raise ValidationError(errors)
-        cls.save_variants(info, instances, cleaned_inputs)
+        cls.save_variants(info, instances, product, cleaned_inputs)
 
         # Recalculate the "minimal variant price" for the parent product
         update_product_minimal_variant_price_task.delay(product.pk)
@@ -342,6 +363,38 @@ class ProductVariantBulkDelete(ModelBulkDeleteMutation):
         permissions = (ProductPermissions.MANAGE_PRODUCTS,)
         error_type_class = ProductError
         error_type_field = "product_errors"
+
+    @classmethod
+    @transaction.atomic
+    def perform_mutation(cls, _root, info, ids, **data):
+        _, pks = resolve_global_ids_to_primary_keys(ids, ProductVariant)
+        # get draft order lines for variants
+        order_line_pks = list(
+            order_models.OrderLine.objects.filter(
+                variant__pk__in=pks, order__status=OrderStatus.DRAFT
+            ).values_list("pk", flat=True)
+        )
+
+        product_pks = list(
+            models.Product.objects.filter(variants__in=pks)
+            .distinct()
+            .values_list("pk", flat=True)
+        )
+
+        response = super().perform_mutation(_root, info, ids, **data)
+
+        # delete order lines for deleted variants
+        order_models.OrderLine.objects.filter(pk__in=order_line_pks).delete()
+
+        # set new product default variant if any has been removed
+        products = models.Product.objects.filter(
+            pk__in=product_pks, default_variant__isnull=True
+        )
+        for product in products:
+            product.default_variant = product.variants.first()
+            product.save(update_fields=["default_variant"])
+
+        return response
 
 
 class ProductVariantStocksCreate(BaseMutation):
@@ -504,7 +557,7 @@ class ProductTypeBulkDelete(ModelBulkDeleteMutation):
     class Meta:
         description = "Deletes product types."
         model = models.ProductType
-        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        permissions = (ProductTypePermissions.MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES,)
         error_type_class = ProductError
         error_type_field = "product_errors"
 
