@@ -44,4 +44,18 @@ RUN SECRET_KEY=dummy STATIC_URL=${STATIC_URL} python3 manage.py collectstatic --
 
 ENV PYTHONUNBUFFERED 1
 
+ARG COMMIT_ID
+ARG VERSION
+
+LABEL org.opencontainers.image.title="mirumee/saleor"                                  \
+      org.opencontainers.image.description="\
+A modular, high performance, headless e-commerce platform built with Python, \
+GraphQL, Django, and ReactJS."                                                         \
+      org.opencontainers.image.url="https://saleor.io/"                                \
+      org.opencontainers.image.source="https://github.com/mirumee/saleor"              \
+      org.opencontainers.image.revision=$COMMIT_ID                                     \
+      org.opencontainers.image.version=$VERSION                                        \
+      org.opencontainers.image.authors="Mirumee Software (https://mirumee.com)"        \
+      org.opencontainers.image.licenses="BSD 3"
+
 CMD ["gunicorn", "--bind", "unix:/tmp/gunicorn.sock", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "saleor.asgi:application"]
